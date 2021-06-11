@@ -4,8 +4,12 @@
 #include <QWindow>
 #include <QDesktopWidget>
 #include <QDebug>
+#ifdef Q_OS_WIN32
 #include "GoatScreenshotGDI.h"
 #include "GoatScreenshotDXGI.h"
+#elif defined(Q_OS_MACOS)
+#include "GoatScreenshotMac.h"
+#endif
 GoatScreenshot::GoatScreenshot(QRect shotRect, QScreen *screen, bool withCursor)
 {
 	if(screen == nullptr){
@@ -34,7 +38,13 @@ GoatScreenshot* GoatScreenshot::Create(QRect shotRect, QScreen *screen, bool wit
 #endif
 
 #ifdef Q_OS_MACOS
-
+GoatScreenshot* GoatScreenshot::Create(QRect shotRect, QScreen *screen, bool withCursor)
+{
+	GoatScreenshot* retObj;
+	qInfo() << "init GoatScreenshotGDI";
+	retObj = new GoatScreenshotMac(shotRect, screen, withCursor);
+	return retObj;
+}
 #endif
 
 bool GoatScreenshot::changeShotRect(QRect shotRect)
