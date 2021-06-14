@@ -1,4 +1,5 @@
 #include <QImage>
+#include <QDebug>
 void ImageRealloc(QImage &img, 
     int width, int height, 
     QImage::Format format)
@@ -42,10 +43,13 @@ void DrawCursorMaskMono(QImage &dest, uchar* pCursorBuffer, int CursorlineBytes)
 
 void DrawCursorMask(QImage &dest, uchar* pCursorBuffer, int CursorlineBytes)
 {
-    if(dest.width() / CursorlineBytes == 8){
-        DrawCursorMaskMono(dest, pCursorBuffer, CursorlineBytes);
-        return;
-    }
+    
+	qDebug() << "DrawCursorMask";
+    // if(dest.width() / CursorlineBytes == 8){
+	//     qDebug() << "DrawCursorMaskMono";
+    //     DrawCursorMaskMono(dest, pCursorBuffer, CursorlineBytes);
+    //     return;
+    // }
     uint32_t* pShapeBuffer32 = (uint32_t*)pCursorBuffer;
     uint32_t* pDesktopBits32 = (uint32_t*)dest.bits();
     for(int j = 0; j<dest.height(); j++)

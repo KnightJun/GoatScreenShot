@@ -38,69 +38,39 @@ bool BitmapInfoToBuffer(PBITMAPINFO pbmi, HBITMAP hbm,uchar* buffer)
 	DeleteDC(hDC);
 	return ret;
 }
-PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp)
+
+void DrawHICON(QImage &image, HICON icon, int x = 0, int y =0)
 {
-	BITMAP bmp;
-	PBITMAPINFO pbmi;
-	WORD    cClrBits;
-	// Retrieve the bitmap color format, width, and height. 
-	if (!GetObject(hBmp, sizeof(BITMAP), (LPSTR)&bmp))
-		return NULL;
+	HBITMAP hBmp = QtWin::imageToHBITMAP(image);
+	HDC hdc0 = GetDC(0);
+	HDC hdcMem = CreateCompatibleDC(hdc0);
+	HBITMAP hBmpOld = (HBITMAP)SelectObject(hdcMem, hBmp);
+	DrawIconEx(hdcMem, x, y,
+		icon, 0, 0, 0, NULL, DI_NORMAL | DI_COMPAT);
+	image = QtWin::imageFromHBITMAP(hBmp);
+	DeleteObject(hBmp);
+	DeleteObject(hBmpOld);
+	ReleaseDC(NULL, hdc0);
+	/////////////////////////////////////////
+	DeleteDC(hdcMem);
+}
 
-	// Convert the color format to a count of bits. 
-	cClrBits = (WORD)(bmp.bmPlanes * bmp.bmBitsPixel);
-	if (cClrBits == 1)
-		cClrBits = 1;
-	else if (cClrBits <= 4)
-		cClrBits = 4;
-	else if (cClrBits <= 8)
-		cClrBits = 8;
-	else if (cClrBits <= 16)
-		cClrBits = 16;
-	else if (cClrBits <= 24)
-		cClrBits = 24;
-	else cClrBits = 32;
-
-	// Allocate memory for the BITMAPINFO structure. (This structure 
-	// contains a BITMAPINFOHEADER structure and an array of RGBQUAD 
-	// data structures.) 
-
-	if (cClrBits != 24)
-		pbmi = (PBITMAPINFO)LocalAlloc(LPTR,
-			sizeof(BITMAPINFOHEADER) +
-			sizeof(RGBQUAD) * (1 << cClrBits));
-
-	// There is no RGBQUAD array for the 24-bit-per-pixel format. 
-
-	else
-		pbmi = (PBITMAPINFO)LocalAlloc(LPTR,
-			sizeof(BITMAPINFOHEADER));
-
-	// Initialize the fields in the BITMAPINFO structure. 
-
-	pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-	pbmi->bmiHeader.biWidth = bmp.bmWidth;
-	pbmi->bmiHeader.biHeight = bmp.bmHeight;
-	pbmi->bmiHeader.biPlanes = bmp.bmPlanes;
-	pbmi->bmiHeader.biBitCount = bmp.bmBitsPixel;
-	if (cClrBits < 24)
-		pbmi->bmiHeader.biClrUsed = (1 << cClrBits);
-
-	// If the bitmap is not compressed, set the BI_RGB flag. 
-	pbmi->bmiHeader.biCompression = BI_RGB;
-
-	// Compute the number of bytes in the array of color 
-	// indices and store the result in biSizeImage. 
-	// For Windows NT, the width must be DWORD aligned unless 
-	// the bitmap is RLE compressed. This example shows this. 
-	// For Windows 95/98/Me, the width must be WORD aligned unless the 
-	// bitmap is RLE compressed.
-	pbmi->bmiHeader.biSizeImage = ((pbmi->bmiHeader.biWidth * cClrBits + 31) & ~31) / 8
-		* pbmi->bmiHeader.biHeight;
-	// Set biClrImportant to 0, indicating that all of the 
-	// device colors are important. 
-	pbmi->bmiHeader.biClrImportant = 0;
-	return pbmi;
+QSize GetSize(ICONINFO info) {
+	int iconWidth, icomHeight;
+	BITMAP bmp = { 0 };
+	if (info.hbmColor) {
+		const int nWrittenBytes = GetObject(info.hbmColor, sizeof(bmp), &bmp);
+		iconWidth = bmp.bmWidth;
+		icomHeight = bmp.bmHeight;
+		DeleteObject(info.hbmColor);
+	}
+	else if (info.hbmMask) {
+		const int nWrittenBytes = GetObject(info.hbmMask, sizeof(bmp), &bmp);
+		iconWidth = bmp.bmWidth;
+		icomHeight = bmp.bmHeight / 2;
+		DeleteObject(info.hbmMask);
+	}
+	return QSize(iconWidth, icomHeight);
 }
 
 bool GoatScreenshotGDI::getMouseImage(
@@ -110,47 +80,21 @@ bool GoatScreenshotGDI::getMouseImage(
 	CURSORINFO ci = {0};
 	ICONINFO info = {0};
 	BITMAP bmp = { 0 };
+	bool result;
 	bool bRes;
 	ci.cbSize = sizeof(CURSORINFO);
 	bRes = GetCursorInfo(&ci);
-	if (!bRes){
-		qDebug() << "GetCursorInfo faild";
-		return false;
-	}
 	bRes = GetIconInfo(ci.hCursor, &info);
-	if (!bRes){
-		qDebug() << "GetIconInfo faild";
-		return false;
-	}
+	QSize mouseSize = GetSize(info);
 	mouseImagePoint = QPoint(ci.ptScreenPos.x - info.xHotspot, ci.ptScreenPos.y - info.yHotspot);
-	mouseImagePoint  = mouseImagePoint - shotRect.topLeft();
 	
-	HBITMAP hbm = info.hbmColor ? info.hbmColor : info.hbmMask;
-	PBITMAPINFO pBitmapInfo = CreateBitmapInfoStruct(hbm);
-	QRect mouseRect = QRect(mouseImagePoint.x(), mouseImagePoint.y(), 
-	pBitmapInfo->bmiHeader.biWidth, pBitmapInfo->bmiHeader.biHeight);
-	if(hbm == info.hbmMask){
-		mouseRect.setHeight(mouseRect.height() / 2);
-	}
-	if(!mouseRect.intersects(QRect(0, 0, shotRect.width(), shotRect.height()))){
-		LocalFree(pBitmapInfo);
-		DeleteObject(hbm);
+	if (!shotRect.intersects(QRect(mouseImagePoint, mouseSize))) {
 		return false;
 	}
-
-	ImageRealloc(mouseImage, mouseRect.width(), mouseRect.height(),
-		QImage::Format_ARGB32);
-	
-	uchar* buffer = new uchar[pBitmapInfo->bmiHeader.biSizeImage];
-	pBitmapInfo->bmiHeader.biHeight = -pBitmapInfo->bmiHeader.biHeight;
-	BitmapInfoToBuffer(pBitmapInfo, hbm, buffer);
-	if(info.hbmColor){
-		ImageBuffCopy(mouseImage, buffer);
-	} else {
-		mouseImage = screenImage.copy(QRect(mouseImagePoint, mouseImage.size()));
-		DrawCursorMask(mouseImage, buffer, pBitmapInfo->bmiHeader.biBitCount * pBitmapInfo->bmiHeader.biWidth / 8);
-	}
-	LocalFree(pBitmapInfo);
-	DeleteObject(hbm);
+	mouseImagePoint  = mouseImagePoint - shotRect.topLeft();
+	QRect mouseRect = QRect(mouseImagePoint, mouseSize);
+	mouseImage = screenImage.copy(mouseRect);
+	DrawHICON(mouseImage, ci.hCursor);
+	// mouseImage.save("mouseImage.png");
 	return true;
 }

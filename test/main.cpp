@@ -15,7 +15,7 @@ TEST(ScreenInfo, info)
  * 正常测试
  * */
 TEST(NormalEncode, GoatScreenshotGDI) {
-    GoatScreenshot* gscreen = GoatScreenshot::Create(QRect(200,200,500,500));
+    GoatScreenshot* gscreen = GoatScreenshot::Create();
     EXPECT_TRUE(gscreen->screenImage().isNull());
     gscreen->getNextFrame();
     EXPECT_FALSE(gscreen->screenImage().isNull());

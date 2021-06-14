@@ -18,6 +18,7 @@ target("GoatScreenShot")
     if is_os("windows") then 
         add_files("src/GoatScreenshotGDI.cpp") 
         add_files("src/GoatScreenshotDXGI.cpp")
+        add_files("src/cursor.cpp")
     elseif is_os("macosx") then
         add_files("src/GoatScreenshotMac.cpp")
     end
